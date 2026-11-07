@@ -9,7 +9,7 @@ from pathlib import Path
 
 WORKFLOWS = Path("/var/lib/agentd/workflows")
 ALLOWED_METHODS = {
-    "exec", "system.status", "service.install", "service.start",
+    "exec", "cell.exec", "cell.status", "vm.run", "vm.status", "system.status", "service.install", "service.start",
     "service.stop", "service.restart", "service.status", "service.logs",
     "native.install", "native.start", "native.stop", "native.restart",
     "native.status", "native.logs", "native.list",

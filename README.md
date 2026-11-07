@@ -10,6 +10,8 @@ AgentOS 不是把大模型放进内核，也不是另一个聊天界面。Linux 
 
 - **自然语言任务**：通过 `a do "..."` 提交真实任务，支持多轮工具调用和明确结束。
 - **LLM 规划器**：支持 DeepSeek 及其他 OpenAI 兼容 `/chat/completions` 服务。
+- **AgentCell 隔离执行**：普通命令默认在非特权 cell 中运行，使用 namespaces、Landlock、seccomp 和真实 cgroup 资源限制，默认无网络。
+- **KVM 后端**：为需要独立内核的高风险任务提供 QEMU/KVM 启动接口，默认无网络、磁盘快照且不在硬件不可用时降级模拟。
 - **无头浏览器**：使用 Playwright 控制 Chromium，提取 JavaScript 渲染后的标题、正文和链接。
 - **静态网页抓取**：去除 HTML、脚本和样式，返回纯文本。
 - **MCP 工具**：支持 stdio 和 HTTP 传输、工具发现、调用、超时及进程清理。
@@ -30,6 +32,11 @@ AgentOS gateway (192.168.3.11:8765)
         |
         v
 LLM planner <----> OpenAI-compatible model API
+        |
+        +----> cell_exec ----> drop-privilege launcher + cgroup
+        |                      +----> AgentCell sand (no network)
+        |
+        +----> vm_run ----> QEMU/KVM (independent guest kernel)
         |
         +----> Local system tools ----> agentd Unix socket
         |
@@ -52,6 +59,23 @@ a status
 a health
 a services
 ```
+
+### 在隔离 cell 中执行命令
+
+```bash
+a do "Run uname -r in an AgentCell sandbox and return the result"
+a do "Use cell_exec to write 'hello' to /home/agent/cell.txt and read it back"
+```
+
+cell 内的工作目录 `/home/agent` 对应宿主 `/var/lib/agentos/workspace`。默认无网络，限制为 1 GiB 内存、1 个 CPU 核和 128 个 PID。
+
+### 检查独立内核虚拟化
+
+```bash
+a do "Check KVM availability with vm_status"
+```
+
+`vm_run` 需要明确的 Guest kernel 和 raw disk 路径。当前 ThinkPad 必须在 BIOS 中启用 Intel Virtualization Technology，并出现 `/dev/kvm` 后才能实际启动 VM。
 
 ### 获取动态网页正文
 
@@ -177,13 +201,18 @@ python3 -m py_compile \
 ## 安全边界
 
 - AgentOS 能执行高权限系统操作，建议使用专用测试机或虚拟机。
+- 普通命令应使用 `cell_exec`；`exec` 是明确的特权宿主管理通道。
+- cell 启动器只在加入 cgroup 和降权阶段使用 root，payload 以 `agentcell` 用户运行。
 - filesystem MCP 默认仅开放 `/var/lib/agentos/workspace`。
+- `vm_run` 默认使用临时磁盘快照；`persist=true` 会修改 Guest 镜像，应谨慎使用。
 - 不要把 LLM API Key、网关 Token、LUKS 密钥或 SSH 私钥提交到仓库。
 - 对删除、覆盖、软件包变更等不可逆操作，应增加人工确认和回滚策略。
 - 浏览器工具会执行目标页面自身的 JavaScript，不应访问不可信的管理凭据或敏感浏览器会话。
 
 ## 当前状态与限制
 
-AgentOS 已在 Lenovo ThinkPad X240 的 Arch Linux 环境中完成 native 启动和真实任务验证。当前仓库是源码及部署配置快照，**尚不提供通用一键安装器、完整发行版镜像或生产级安全保证**。
+AgentOS 已在 Lenovo ThinkPad X240 的 Arch Linux 环境中完成 native 启动、真实 cell 隔离、内核 cgroup 限制和自然语言任务验证。当前 ThinkPad 的 BIOS 尚未开放 VT-x，因此 KVM 接口已验证参数构造和失败处理，但尚未完成真实 Guest 启动。
+
+当前仓库是源码及部署配置快照，**尚不提供通用一键安装器、完整发行版镜像或生产级安全保证**。
 
 后续适合继续完善：可复现安装、快照与回滚、更多凭据隔离的 MCP 服务、浏览器交互，以及更完整的自动化测试。

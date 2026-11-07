@@ -4,6 +4,10 @@ import socketserver
 from pathlib import Path
 
 from .executor import execute
+from .cell import execute as cell_execute
+from .cell import status as cell_status
+from .vm import run as vm_run
+from .vm import status as vm_status
 from .store import TaskStore
 from .systemd import action as service_action
 from .systemd import install as service_install
@@ -41,6 +45,14 @@ def dispatch(method, params):
     try:
         if method == "exec":
             result = execute(params.get("argv"), params.get("timeout", 60), params.get("cwd"))
+        elif method == "cell.exec":
+            result = cell_execute(params.get("argv"), params.get("timeout", 60))
+        elif method == "cell.status":
+            result = cell_status()
+        elif method == "vm.run":
+            result = vm_run(params)
+        elif method == "vm.status":
+            result = vm_status()
         elif method == "system.status":
             result = system_status()
         elif method == "service.install":

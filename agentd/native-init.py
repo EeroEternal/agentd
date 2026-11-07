@@ -16,6 +16,7 @@ MOUNTS = (
     ("proc", "/proc", "proc", "nosuid,nodev,noexec"),
     ("sysfs", "/sys", "sysfs", "nosuid,nodev,noexec"),
     ("devtmpfs", "/dev", "devtmpfs", "nosuid"),
+    ("cgroup2", "/sys/fs/cgroup", "cgroup2", "nosuid,nodev,noexec"),
 )
 
 

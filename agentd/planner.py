@@ -80,8 +80,8 @@ LOCAL_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "exec",
-            "description": "Execute a system command as root with an argv array",
+            "name": "cell_exec",
+            "description": "Execute an ordinary command inside an unprivileged AgentCell sandbox with no network, resource limits, and a dedicated workspace; prefer this over exec",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -89,6 +89,50 @@ LOCAL_TOOLS = [
                     "timeout": {"type": "integer"},
                 },
                 "required": ["argv"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "exec",
+            "description": "Execute a privileged host command as root; use only for host administration, not ordinary commands",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "argv": {"type": "array", "items": {"type": "string"}},
+                    "timeout": {"type": "integer"},
+                },
+                "required": ["argv"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "vm_status",
+            "description": "Check QEMU, KVM device, and CPU virtualization availability",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "vm_run",
+            "description": "Boot an independent guest kernel with QEMU/KVM for high-risk OS tasks; uses a non-persistent disk snapshot and no network by default",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "kernel": {"type": "string"},
+                    "initrd": {"type": "string"},
+                    "disk": {"type": "string"},
+                    "append": {"type": "string"},
+                    "memory": {"type": "integer"},
+                    "cpus": {"type": "integer"},
+                    "timeout": {"type": "integer"},
+                    "persist": {"type": "boolean"},
+                },
+                "required": ["kernel", "disk"],
             },
         },
     },
@@ -189,6 +233,9 @@ TOOL_METHODS = {
     "file_read": "file.read",
     "file_write": "file.write",
     "network_status": "network.status",
+    "cell_exec": "cell.exec",
+    "vm_run": "vm.run",
+    "vm_status": "vm.status",
     "exec": "exec",
 }
 
@@ -215,6 +262,15 @@ def execute_tool(name, arguments):
     if name == "browser_fetch":
         from .browser import fetch
         return fetch(arguments["url"])
+    if name == "cell_exec":
+        from .cell import execute
+        return execute(arguments.get("argv"), arguments.get("timeout", 60))
+    if name == "vm_status":
+        from .vm import status
+        return status()
+    if name == "vm_run":
+        from .vm import run
+        return run(arguments)
     if name == "finish":
         return {"finished": True, "summary": arguments["summary"]}
     return call_agentd(TOOL_METHODS.get(name, name), arguments)
@@ -247,6 +303,10 @@ def run_goal(goal):
             "role": "system",
             "content": (
                 "You are the AgentOS planner. Use tools to achieve the user's goal. "
+                "Use cell_exec for ordinary shell commands and untrusted code; it has no network. "
+                "Use exec only when privileged host administration is explicitly required. "
+                "Use vm_status before vm_run, and use vm_run only for high-risk tasks that require "
+                "an independent guest kernel; never use it for ordinary commands. "
                 "For web pages, use web_fetch for static HTML and browser_fetch when JavaScript "
                 "rendering is needed or web_fetch returns an empty body. Do not use shell commands "
                 "for ordinary web fetching. Inspect state before destructive actions and verify "
