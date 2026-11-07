@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, "/usr/local/lib/agentd")
 
 from agentd.__main__ import request
+from agentd.operations import doctor, install, pair, recover, update
 
 ALIASES = {
     "heartbeat": "agentos-heartbeat-native",
@@ -27,6 +28,7 @@ USAGE = """Usage:
   agentos workflow <json-file>
   agentos workflow-status <workflow-id>
   agentos exec <command> [args...]
+  agentos doctor | pair | install | update | recover
 
 Service aliases: heartbeat, network, ssh, dbus, resolved, udev
 """
@@ -110,6 +112,22 @@ def main():
         return 0
     if command == "workflow-status" and len(args) == 1:
         show_workflow(call("workflow.get", {"workflow_id": args[0]}))
+        return 0
+    if command == "doctor" and not args:
+        result = doctor()
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["ready"] else 1
+    if command == "pair" and not args:
+        print(json.dumps(pair(), ensure_ascii=False, indent=2))
+        return 0
+    if command == "install" and not args:
+        print(json.dumps(install(), ensure_ascii=False, indent=2))
+        return 0
+    if command == "update" and not args:
+        print(json.dumps(update(), ensure_ascii=False, indent=2))
+        return 0
+    if command == "recover" and not args:
+        print(json.dumps(recover(), ensure_ascii=False, indent=2))
         return 0
     if command == "exec" and args:
         result = call("exec", {"argv": args, "timeout": 300})

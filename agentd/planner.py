@@ -4,6 +4,7 @@ import urllib.request
 from pathlib import Path
 
 from .mcp_client import clients
+from .policy import authorize
 from .__main__ import request as socket_request
 
 CONFIG_PATH = Path("/etc/agentd/llm.json")
@@ -248,7 +249,8 @@ def call_agentd(method, params):
     return response["result"]
 
 
-def execute_tool(name, arguments):
+def execute_tool(name, arguments, requested_capabilities=None):
+    authorize(name, arguments, requested_capabilities)
     if name.startswith("mcp__"):
         _, server, tool = name.split("__", 2)
         client = clients()[server]
@@ -290,7 +292,7 @@ def mock_goal(goal):
     }
 
 
-def run_goal(goal):
+def run_goal(goal, requested_capabilities=None):
     if not isinstance(goal, str) or not goal.strip():
         raise ValueError("goal must be a non-empty string")
     settings = config()
@@ -334,7 +336,7 @@ def run_goal(goal):
             name = call["function"]["name"]
             arguments = json.loads(call["function"].get("arguments", "{}"))
             try:
-                result = execute_tool(name, arguments)
+                result = execute_tool(name, arguments, requested_capabilities)
             except Exception as error:
                 result = {"error": str(error)}
             steps.append({"method": name, "result": result})

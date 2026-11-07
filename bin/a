@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+import json
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+BASE = "http://192.168.3.11:8765"
+TOKEN_PATH = Path.home() / ".config/agentos/token"
+USAGE = """Usage:
+  a <goal>
+  a do <goal>
+  a vm smoke|create|start|status|stop|delete <name>
+  a vm exec <name> <command> [args...]
+  a vm snapshot|restore <name> <snapshot>
+  a cell status|exec <command> [args...]
+  a cell python <code>
+  a last | files | undo | doctor | pair
+  a get <workspace-file> [destination]
+  a snapshot create|list|delete|restore [name]
+  a boot default | boot set-default <entry> | boot restore <backup-id>
+  a do --allow-host <goal> | a do --allow-vm <goal>
+  a status | health | services | logs <service>
+"""
+
+
+def request(endpoint, payload, raw=False):
+    token = TOKEN_PATH.read_text(encoding="utf-8").strip()
+    request = urllib.request.Request(
+        f"{BASE}/{endpoint}",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=3700) as response:
+            data = response.read()
+    except urllib.error.HTTPError as error:
+        detail = json.loads(error.read())
+        raise RuntimeError(detail.get("error", f"HTTP {error.code}")) from error
+    if raw:
+        return data
+    return json.loads(data)
+
+
+def show(result):
+    if isinstance(result, dict) and "stdout" in result:
+        print(result["stdout"], end="")
+        if result.get("stderr"):
+            print(result["stderr"], end="", file=sys.stderr)
+        return
+    if isinstance(result, dict) and "result" in result and "steps" in result:
+        print(result["result"])
+        return
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def vm(args):
+    if not args:
+        raise ValueError(USAGE)
+    action = args[0]
+    if action == "smoke":
+        return request("vm", {"action": "smoke"})
+    if len(args) < 2:
+        raise ValueError(USAGE)
+    payload = {"action": action, "name": args[1]}
+    if action == "create":
+        if len(args) > 2:
+            payload["memory"] = int(args[2])
+        if len(args) > 3:
+            payload["cpus"] = int(args[3])
+    elif action == "exec":
+        payload["argv"] = args[2:]
+        if len(payload["argv"]) == 0:
+            raise ValueError("vm exec requires a command")
+    elif action in {"snapshot", "restore"}:
+        if len(args) != 3:
+            raise ValueError(f"vm {action} requires a VM and snapshot name")
+        payload["snapshot"] = args[2]
+    elif action not in {"start", "status", "stop", "delete"}:
+        raise ValueError(f"unknown VM action: {action}")
+    return request("vm", payload)
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(USAGE, end="")
+        return 0
+    command = sys.argv[1]
+    args = sys.argv[2:]
+    try:
+        if command == "pair" and args:
+            if len(args) != 1:
+                raise ValueError("pair requires the token shown by agentos pair")
+            TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+            TOKEN_PATH.write_text(args[0] + "\n", encoding="utf-8")
+            TOKEN_PATH.chmod(0o600)
+            result = {"paired": True, "host": BASE}
+        elif command == "pair":
+            result = request("cli", {"args": ["pair"]})
+        elif command == "vm":
+            result = vm(args)
+        elif command == "cell":
+            if args and args[0] == "status":
+                result = request("cell", {"action": "status"})
+            else:
+                if args and args[0] == "python":
+                    argv = ["python3", "-c", " ".join(args[1:])]
+                else:
+                    argv = args[1:] if args and args[0] == "exec" else args
+                if not argv:
+                    raise ValueError("cell requires a command")
+                result = request("cell", {"action": "exec", "argv": argv})
+        elif command == "last":
+            result = request("tasks", {"action": "last"})
+        elif command == "files":
+            result = request("files", {"action": "list"})
+        elif command == "get":
+            if not args:
+                raise ValueError("get requires a workspace file")
+            data = request("download", {"path": args[0]}, raw=True)
+            destination = Path(args[1]) if len(args) > 1 else Path(args[0]).name
+            destination.write_bytes(data)
+            result = {"downloaded": str(destination), "bytes": len(data)}
+        elif command == "undo":
+            result = request("undo", {})
+        elif command == "snapshot":
+            if not args or args[0] not in {"create", "list", "delete", "restore"}:
+                raise ValueError("snapshot requires create, list, delete, or restore")
+            payload = {"action": args[0]}
+            if args[0] != "list":
+                if len(args) != 2:
+                    raise ValueError("snapshot action requires a name")
+                payload["name"] = args[1]
+            result = request("recovery", payload)
+        elif command == "boot":
+            if not args:
+                raise ValueError("boot requires default, set-default, or restore")
+            if args[0] == "default":
+                result = request("recovery", {"action": "default"})
+            elif args[0] == "set-default" and len(args) >= 2:
+                result = request("recovery", {"action": "set_default", "entry": " ".join(args[1:])})
+            elif args[0] == "restore" and len(args) == 2:
+                result = request("recovery", {"action": "restore_boot", "backup_id": args[1]})
+            else:
+                raise ValueError("invalid boot command")
+        elif command == "doctor":
+            result = request("cli", {"args": ["doctor"]})
+        elif command == "do" or command not in {"status", "health", "services", "start", "stop", "restart", "logs", "read", "write", "restore", "workflow", "workflow-status", "exec"}:
+            parts = args if command == "do" else [command, *args]
+            capabilities = {}
+            while parts and parts[0] in {"--allow-host", "--allow-vm"}:
+                capability = "host" if parts[0] == "--allow-host" else "vm"
+                capabilities[capability] = True
+                parts.pop(0)
+            goal = " ".join(parts)
+            result = request("do", {"goal": goal, "capabilities": capabilities})
+        else:
+            result = request("cli", {"args": [command, *args]})
+        show(result)
+        return result.get("exit_code", 0) if isinstance(result, dict) else 0
+    except (ValueError, RuntimeError) as error:
+        print(f"a: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

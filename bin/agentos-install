@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -d "$(dirname "$0")/../agentd" ]; then
+    ROOT=$(cd "$(dirname "$0")/.." && pwd)
+else
+    ROOT=/usr/local/src/agentd
+fi
+if [ "$EUID" -ne 0 ]; then
+    exec sudo "$0" "$@"
+fi
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
+packages=(python python-playwright chromium qemu-base libbpf libelf zlib nodejs npm clang make gcc bpf vim)
+missing=()
+for package in "${packages[@]}"; do
+    pacman -Q "$package" >/dev/null 2>&1 || missing+=("$package")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+    pacman -S --needed --noconfirm "${missing[@]}"
+fi
+npm install -g @modelcontextprotocol/server-filesystem @modelcontextprotocol/server-memory
+
+install -d /usr/local/lib/agentd/agentd /usr/local/bin
+cp -a "$ROOT/agentd/." /usr/local/lib/agentd/agentd/
+for script in agentd_gateway.py agentd_webserver.py agentd_mock_mcp.py; do
+    install -m 0644 "$ROOT/$script" "/usr/local/lib/agentd/$script"
+done
+install -m 0755 "$ROOT/agentd/native-init.py" /usr/local/lib/agentd/native-init.py
+install -m 0755 "$ROOT/agentd/native-console.py" /usr/local/lib/agentd/native-console.py
+install -m 0755 "$ROOT/agentd/native-diagnostics.py" /usr/local/lib/agentd/native-diagnostics.py
+install -m 0755 "$ROOT/bin/agentos" /usr/local/bin/agentos
+install -m 0755 "$ROOT/bin/a" /usr/local/bin/a
+install -m 0755 "$ROOT/agentd/guest_agent.py" /usr/local/lib/agentd/agentd/guest_agent.py
+
+if [ -d /etc/agentd/services ]; then
+    /usr/local/bin/agentos restart agentos-gateway 2>/dev/null || true
+fi
+
+if [ ! -x /usr/local/bin/sand ] || [ -n "${AGENTCELL_SRC:-}" ]; then
+    cell_source=${AGENTCELL_SRC:-/usr/local/src/agentcell}
+    if [ ! -f "$cell_source/src/sand.c" ]; then
+        install -d "$cell_source"
+        git clone https://github.com/EeroEternal/agentcell.git "$cell_source"
+    fi
+    make -C "$cell_source" sand
+    install -m 0755 "$cell_source/sand" /usr/local/bin/sand
+fi
+
+install -m 0644 "$ROOT/limine/agentos-luks-mkinitcpio.conf" /etc/mkinitcpio.conf.d/agentos_luks.conf
+/usr/local/bin/agentos install
