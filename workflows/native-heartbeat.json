@@ -1,0 +1,37 @@
+{
+  "goal": "在原生 AgentOS 中通过工作流重启并验证 heartbeat",
+  "steps": [
+    {
+      "name": "inspect",
+      "method": "system.status",
+      "params": {}
+    },
+    {
+      "name": "restart-native",
+      "method": "native.restart",
+      "params": {
+        "name": "agentos-heartbeat-native"
+      }
+    },
+    {
+      "name": "verify-native",
+      "method": "native.status",
+      "params": {
+        "name": "agentos-heartbeat-native"
+      },
+      "expect": {
+        "status": "running"
+      },
+      "attempts": 5,
+      "delay": 1
+    },
+    {
+      "name": "logs-native",
+      "method": "native.logs",
+      "params": {
+        "name": "agentos-heartbeat-native",
+        "lines": 5
+      }
+    }
+  ]
+}

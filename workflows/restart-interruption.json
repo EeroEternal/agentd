@@ -1,0 +1,16 @@
+{
+  "goal": "验证 agentd 重启时工作流中断处理",
+  "steps": [
+    {
+      "name": "wait",
+      "method": "exec",
+      "params": {
+        "argv": [
+          "/usr/bin/sleep",
+          "30"
+        ],
+        "timeout": 60
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "goal": "验证 AgentOS 依赖恢复后的健康工作流",
+  "steps": [
+    {
+      "name": "verify-health",
+      "method": "system.health",
+      "params": {},
+      "expect": {
+        "ready": true
+      },
+      "attempts": 5,
+      "delay": 1
+    },
+    {
+      "name": "inspect-system",
+      "method": "system.status",
+      "params": {}
+    }
+  ]
+}

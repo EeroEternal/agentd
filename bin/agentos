@@ -1,0 +1,125 @@
+#!/usr/bin/python
+import json
+import sys
+
+sys.path.insert(0, "/usr/local/lib/agentd")
+
+from agentd.__main__ import request
+
+ALIASES = {
+    "heartbeat": "agentos-heartbeat-native",
+    "network": "agentos-network",
+    "ssh": "agentos-sshd",
+    "dbus": "agentos-dbus",
+    "resolved": "agentos-resolved",
+    "udev": "agentos-udev",
+}
+
+USAGE = """Usage:
+  agentos status
+  agentos health
+  agentos services
+  agentos start|stop|restart <service>
+  agentos logs <service> [lines]
+  agentos read <path>
+  agentos write <path> <text>
+  agentos restore <path>
+  agentos workflow <json-file>
+  agentos workflow-status <workflow-id>
+  agentos exec <command> [args...]
+
+Service aliases: heartbeat, network, ssh, dbus, resolved, udev
+"""
+
+
+def call(method, params):
+    response = request(method, params)
+    if not response.get("ok"):
+        error = response.get("error", {})
+        raise RuntimeError(error.get("message", "agentd request failed"))
+    return response["result"]
+
+
+def service(name):
+    return ALIASES.get(name, name)
+
+
+def show_service(result):
+    print(f"{result['name']}: {result['status']} (pid {result['pid']}, restarts {result['restarts']})")
+
+
+def show_workflow(result):
+    print(f"Workflow: {result['id']}")
+    print(f"Task: {result['task_id']}")
+    print(f"Status: {result['status']}")
+    for step in result.get("steps", []):
+        print(f"  {step['name']}: {step['status']}")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(USAGE, end="")
+        return 0
+    command = sys.argv[1]
+    args = sys.argv[2:]
+
+    if command == "status":
+        result = call("system.status", {})
+        print(f"Kernel: {result['kernel_release']}")
+        print(f"Host: {result['hostname']}")
+        print(f"Init: {result.get('init', 'systemd')}")
+        print(f"agentd: {result['agentd']}")
+        print(f"sshd: {result['sshd']}")
+        return 0
+    if command == "health":
+        result = call("system.health", {})
+        print(f"Ready: {str(result['ready']).lower()}")
+        for reason in result["reasons"]:
+            print(f"  {reason}")
+        return 0 if result["ready"] else 1
+    if command == "services":
+        for result in call("native.list", {}):
+            show_service(result)
+        return 0
+    if command in {"start", "stop", "restart"} and len(args) == 1:
+        result = call(f"native.{command}", {"name": service(args[0])})
+        show_service(result)
+        return 0
+    if command == "logs" and 1 <= len(args) <= 2:
+        lines = int(args[1]) if len(args) == 2 else 20
+        result = call("native.logs", {"name": service(args[0]), "lines": lines})
+        print(result["logs"])
+        return 0
+    if command == "read" and len(args) == 1:
+        print(call("file.read", {"path": args[0]})["content"], end="")
+        return 0
+    if command == "write" and len(args) >= 2:
+        result = call("file.write", {"path": args[0], "content": " ".join(args[1:])})
+        print(f"Wrote {result['path']} ({result['size']} bytes)")
+        if result["backup"]:
+            print(f"Backup: {result['backup']}")
+        return 0
+    if command == "restore" and len(args) == 1:
+        result = call("file.restore", {"path": args[0]})
+        print(f"Restored {result['path']} from {result['restored_from']}")
+        return 0
+    if command == "workflow" and len(args) == 1:
+        with open(args[0], encoding="utf-8") as source:
+            result = call("workflow.start", json.load(source))
+        show_workflow(result)
+        return 0
+    if command == "workflow-status" and len(args) == 1:
+        show_workflow(call("workflow.get", {"workflow_id": args[0]}))
+        return 0
+    if command == "exec" and args:
+        result = call("exec", {"argv": args, "timeout": 300})
+        print(result["stdout"], end="")
+        print(result["stderr"], end="", file=sys.stderr)
+        return result["exit_code"]
+
+    print(USAGE, end="")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

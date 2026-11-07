@@ -1,0 +1,44 @@
+{
+  "goal": "通过工作流完成 AgentOS 文件、软件包和网络资源管理",
+  "steps": [
+    {
+      "name": "write-node",
+      "method": "file.write",
+      "params": {
+        "path": "/etc/agentos/node.json",
+        "content": "{\"role\":\"agent-native\",\"version\":\"0.3.0\"}"
+      }
+    },
+    {
+      "name": "verify-node",
+      "method": "file.read",
+      "params": {
+        "path": "/etc/agentos/node.json"
+      },
+      "expect": {
+        "path": "/etc/agentos/node.json",
+        "content": "{\"role\":\"agent-native\",\"version\":\"0.3.0\"}"
+      }
+    },
+    {
+      "name": "verify-bash",
+      "method": "package.info",
+      "params": {
+        "name": "bash"
+      },
+      "expect": {
+        "installed": true
+      }
+    },
+    {
+      "name": "inspect-network",
+      "method": "network.status",
+      "params": {}
+    },
+    {
+      "name": "inspect-system",
+      "method": "system.status",
+      "params": {}
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+[Unit]
+Description=AgentOS Privileged Executor
+After=local-fs.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/usr/local/lib/agentd
+Environment=PYTHONPATH=/usr/local/lib/agentd
+ExecStart=/usr/bin/python -m agentd server
+Restart=on-failure
+RuntimeDirectory=agentd
+RuntimeDirectoryMode=0700
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

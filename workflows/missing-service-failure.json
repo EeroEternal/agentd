@@ -1,0 +1,12 @@
+{
+  "goal": "验证失败工作流记录",
+  "steps": [
+    {
+      "name": "missing-service",
+      "method": "service.status",
+      "params": {
+        "name": "agentos-missing.service"
+      }
+    }
+  ]
+}

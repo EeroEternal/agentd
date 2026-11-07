@@ -1,0 +1,50 @@
+{
+  "goal": "通过自主工作流重启并验证 heartbeat",
+  "steps": [
+    {
+      "name": "inspect",
+      "method": "system.status",
+      "params": {}
+    },
+    {
+      "name": "install",
+      "method": "service.install",
+      "params": {
+        "name": "agentos-heartbeat.service",
+        "command": "/usr/bin/bash -c 'while true; do echo heartbeat; sleep 5; done'",
+        "restart": "on-failure",
+        "restart_sec": 1
+      }
+    },
+    {
+      "name": "restart",
+      "method": "service.restart",
+      "params": {
+        "name": "agentos-heartbeat.service"
+      }
+    },
+    {
+      "name": "verify",
+      "method": "service.status",
+      "params": {
+        "name": "agentos-heartbeat.service"
+      },
+      "expect": {
+        "properties": {
+          "ActiveState": "active",
+          "SubState": "running"
+        }
+      },
+      "attempts": 5,
+      "delay": 1
+    },
+    {
+      "name": "logs",
+      "method": "service.logs",
+      "params": {
+        "name": "agentos-heartbeat.service",
+        "lines": 5
+      }
+    }
+  ]
+}
