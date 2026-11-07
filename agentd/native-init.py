@@ -7,6 +7,7 @@ import socket
 import subprocess
 import threading
 import time
+import traceback
 from pathlib import Path
 
 from agentd.native import SUPERVISOR
@@ -38,7 +39,9 @@ def initialize():
     if not mounted("/run"):
         subprocess.run(["/usr/bin/mount", "-t", "tmpfs", "-o", "nosuid,nodev,mode=755", "run", "/run"], check=True)
     if not mounted("/boot"):
-        subprocess.run(["/usr/bin/mount", "/dev/sda1", "/boot"], check=True)
+        boot = subprocess.run(["/usr/bin/mount", "/dev/sda1", "/boot"])
+        if boot.returncode:
+            print("agentos native: /boot is unavailable; continuing without it", flush=True)
     for subvolume, target in (
         ("@home", "/home"),
         ("@log", "/var/log"),
@@ -70,6 +73,22 @@ def shutdown(signum, frame):
         time.sleep(3600)
 
 
+def crash(error):
+    text = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+    print(text, flush=True)
+    try:
+        Path("/var/log/agentd").mkdir(parents=True, exist_ok=True)
+        Path("/var/log/agentd/native-init-error.log").write_text(text, encoding="utf-8")
+    except Exception as log_error:
+        print(f"agentos native: cannot save crash log: {log_error}", flush=True)
+    try:
+        subprocess.run(["/usr/bin/python", "/usr/local/lib/agentd/native-console.py"])
+    except Exception as console_error:
+        print(f"agentos native: cannot start diagnostic console: {console_error}", flush=True)
+    while True:
+        time.sleep(3600)
+
+
 def main():
     print("agentos native: initializing PID 1", flush=True)
     initialize()
@@ -88,4 +107,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as error:
+        crash(error)

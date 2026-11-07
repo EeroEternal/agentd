@@ -75,7 +75,9 @@ cell 内的工作目录 `/home/agent` 对应宿主 `/var/lib/agentos/workspace`�
 a do "Check KVM availability with vm_status"
 ```
 
-`vm_run` 需要明确的 Guest kernel 和 raw disk 路径。当前 ThinkPad 必须在 BIOS 中启用 Intel Virtualization Technology，并出现 `/dev/kvm` 后才能实际启动 VM。
+`vm_run` 需要明确的 Guest kernel 和 raw disk 路径。其他主机需要先在 BIOS 中启用 Intel VT-x/AMD-V 并出现 `/dev/kvm`。当前 ThinkPad 已完成真实 KVM Guest 启动和自然语言调用验证。
+
+`limine/agentos-kvm.conf` 使用完整 Arch 内核；`limine/agentos-luks-mkinitcpio.conf` 将密钥打包进 initramfs，在保留 LUKS 加密的同时实现自动解锁。
 
 ### 获取动态网页正文
 
@@ -211,7 +213,7 @@ python3 -m py_compile \
 
 ## 当前状态与限制
 
-AgentOS 已在 Lenovo ThinkPad X240 的 Arch Linux 环境中完成 native 启动、真实 cell 隔离、内核 cgroup 限制和自然语言任务验证。当前 ThinkPad 的 BIOS 尚未开放 VT-x，因此 KVM 接口已验证参数构造和失败处理，但尚未完成真实 Guest 启动。
+AgentOS 已在 Lenovo ThinkPad X240 的 Arch Linux 环境中完成 native 启动、真实 cell 隔离、内核 cgroup 限制和自然语言任务验证。VT-x 已启用，独立 Arch kernel 的 KVM Guest 已通过直接调用和自然语言规划器完成启动、串口结果检查与正常关机。
 
 当前仓库是源码及部署配置快照，**尚不提供通用一键安装器、完整发行版镜像或生产级安全保证**。
 

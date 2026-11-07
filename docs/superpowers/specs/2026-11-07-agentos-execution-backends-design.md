@@ -19,7 +19,7 @@ The planner exposes three distinct execution paths:
 - AgentCell runs without the root LSM daemon in this phase, avoiding its current shared control socket and fail-open policy. Network is fixed to `none`; host and veth networking are not exposed through the planner.
 - The AgentOS planner, browser, MCP servers, and host resource APIs remain outside cells.
 - Cell processes run as `agentcell`, not root. The workspace is `/var/lib/agentos/workspace`, shared with the existing filesystem MCP.
-- KVM requires `/dev/kvm`. The ThinkPad currently hides CPU VMX, so unit-level command construction and availability handling can be verified, but a real guest cannot be started until Intel Virtualization Technology is enabled in BIOS.
+- KVM requires `/dev/kvm`. Intel Virtualization Technology is now enabled on the ThinkPad. A raw-disk guest with an independent Arch kernel was booted and powered down through both direct RPC and the natural-language planner.
 
 ## Validation
 

@@ -27,7 +27,7 @@
 - [ ] Write inline tests for unavailable KVM and QEMU command construction, including `-enable-kvm`, `-nographic`, virtio disk, memory, CPU, and timeout arguments.
 - [ ] Implement `status()` and `run(params)` without a TCG fallback. Validate all paths and numeric limits before invoking the executor.
 - [ ] Add `vm.run`/`vm.status` dispatch and planner tools `vm_run`/`vm_status`.
-- [ ] Verify clear failure on the current ThinkPad and record that real guest validation requires BIOS VT-x.
+- [ ] Verify clear failure before VT-x is enabled, then enable BIOS VT-x and verify a real independent-kernel Guest boot through direct RPC and the planner.
 
 ### Task 3: Build, deploy, and integrate
 

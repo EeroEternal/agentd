@@ -4,8 +4,14 @@ import os
 import termios
 
 fd = os.open("/dev/tty1", os.O_RDWR)
-fcntl.ioctl(fd, termios.TIOCSCTTY, 0)
-os.tcsetpgrp(fd, os.getpid())
+try:
+    fcntl.ioctl(fd, termios.TIOCSCTTY, 0)
+except PermissionError:
+    pass
+try:
+    os.tcsetpgrp(fd, os.getpid())
+except PermissionError:
+    pass
 os.dup2(fd, 0)
 os.dup2(fd, 1)
 os.dup2(fd, 2)
